@@ -10,3 +10,7 @@ export * from "./tts/types.js";
 export * from "./tts/azure.js";
 export * from "./audio/ffmpeg.js";
 export * from "./pipeline/voice.js";
+export * from "./storage/r2-storage.js";
+export * from "./db/schema.js";
+export * from "./db/client.js";
+export * from "./queue/types.js";
