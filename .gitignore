@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.next/
+out/
+*.log
+.env
+.env.local
+.turbo/
+.cache/
+coverage/
+.DS_Store
+*.tsbuildinfo
+apps/web/.next/
+packages/video/out/
+.remotion/
