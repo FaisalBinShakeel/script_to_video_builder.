@@ -6,3 +6,7 @@ export * from "./storage/asset-cache.js";
 export * from "./storage/local-storage.js";
 export * from "./providers/pexels.js";
 export * from "./providers/pixabay.js";
+export * from "./tts/types.js";
+export * from "./tts/azure.js";
+export * from "./audio/ffmpeg.js";
+export * from "./pipeline/voice.js";
