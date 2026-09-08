@@ -68,6 +68,7 @@ interface AttemptResult {
 async function attemptOnModel(
   model: string,
   baseMessages: OpenRouterMessage[],
+  apiKey: string | undefined,
 ): Promise<AttemptResult> {
   const messages = [...baseMessages];
 
@@ -76,6 +77,7 @@ async function attemptOnModel(
     messages,
     schemaName: "VideoScript",
     jsonSchema: VIDEO_SCRIPT_JSON_SCHEMA as Record<string, unknown>,
+    apiKey,
   });
 
   const firstParsed = parseAndValidate(first.raw);
@@ -96,6 +98,7 @@ async function attemptOnModel(
     messages,
     schemaName: "VideoScript",
     jsonSchema: VIDEO_SCRIPT_JSON_SCHEMA as Record<string, unknown>,
+    apiKey,
   });
 
   const secondParsed = parseAndValidate(second.raw);
@@ -134,6 +137,12 @@ function parseAndValidate(
   return { success: true, data: result.data };
 }
 
+export interface GenerateScriptOptions {
+  /** Overrides OPENROUTER_API_KEY -- pass the calling user's own key when
+   * they've set one under Settings > API Keys. */
+  apiKey?: string;
+}
+
 /**
  * Generates a validated VideoScript for a topic. Tries each model in the
  * configured fallback chain in order; a model is only skipped in favor of
@@ -142,6 +151,7 @@ function parseAndValidate(
  */
 export async function generateScript(
   rawInput: ScriptGenerationInput,
+  options: GenerateScriptOptions = {},
 ): Promise<VideoScript> {
   const input = ScriptGenerationInputSchema.parse(rawInput);
 
@@ -155,7 +165,7 @@ export async function generateScript(
 
   for (const model of models) {
     try {
-      const { script } = await attemptOnModel(model, messages);
+      const { script } = await attemptOnModel(model, messages, options.apiKey);
       // Always trust the audio pipeline over the LLM's duration estimate
       // later (phase 3), but recompute the sum here so it's at least
       // internally consistent with the scenes returned.

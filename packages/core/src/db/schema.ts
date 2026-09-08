@@ -46,6 +46,31 @@ export const sessions = pgTable("sessions", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
 
+/**
+ * Per-user provider API keys, set from the web app's Settings > API Keys
+ * panel instead of the server .env. Secret fields are stored as opaque
+ * ciphertext (see packages/core/src/crypto/secret-box.ts) -- this table
+ * never holds a plaintext key. Non-secret fields (regions, bucket names)
+ * are stored as plain text since they aren't sensitive on their own.
+ * A null column means "not set", in which case the pipeline falls back to
+ * the server's own environment variables (the previous, admin-only mode).
+ */
+export const userCredentials = pgTable("user_credentials", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  openrouterApiKeyEnc: text("openrouter_api_key_enc"),
+  pexelsApiKeyEnc: text("pexels_api_key_enc"),
+  pixabayApiKeyEnc: text("pixabay_api_key_enc"),
+  azureSpeechKeyEnc: text("azure_speech_key_enc"),
+  azureSpeechRegion: text("azure_speech_region"),
+  r2AccountIdEnc: text("r2_account_id_enc"),
+  r2AccessKeyIdEnc: text("r2_access_key_id_enc"),
+  r2SecretAccessKeyEnc: text("r2_secret_access_key_enc"),
+  r2Bucket: text("r2_bucket"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const brandKits = pgTable("brand_kits", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),

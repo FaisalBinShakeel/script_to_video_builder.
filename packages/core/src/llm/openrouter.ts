@@ -10,6 +10,9 @@ export interface StructuredCompletionRequest {
   messages: OpenRouterMessage[];
   schemaName: string;
   jsonSchema: Record<string, unknown>;
+  /** Overrides OPENROUTER_API_KEY -- used when the calling user has set
+   * their own key in Settings instead of the server's default. */
+  apiKey?: string;
 }
 
 export class OpenRouterError extends Error {
@@ -22,26 +25,22 @@ export class OpenRouterError extends Error {
   }
 }
 
-let client: OpenAI | undefined;
-
 /**
- * Lazily-constructed singleton so importing this module never throws in
- * environments without OPENROUTER_API_KEY set (e.g. running unrelated tests).
+ * Constructs an OpenRouter client for `apiKey` (falling back to
+ * OPENROUTER_API_KEY). Deliberately not cached as a singleton: different
+ * callers now legitimately want different keys (a user's own key from
+ * Settings vs. the server default), and constructing the OpenAI SDK client
+ * is cheap.
  */
-export function getOpenRouterClient(): OpenAI {
-  if (!client) {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      throw new OpenRouterError(
-        "OPENROUTER_API_KEY is not set. Add it to your .env file.",
-      );
-    }
-    client = new OpenAI({
-      apiKey,
-      baseURL: "https://openrouter.ai/api/v1",
-    });
+export function getOpenRouterClient(apiKey?: string): OpenAI {
+  const key = apiKey ?? process.env.OPENROUTER_API_KEY;
+  if (!key) {
+    throw new OpenRouterError(
+      "No OpenRouter API key available. Set OPENROUTER_API_KEY in your .env, " +
+        "or have the user add their own key under Settings > API Keys.",
+    );
   }
-  return client;
+  return new OpenAI({ apiKey: key, baseURL: "https://openrouter.ai/api/v1" });
 }
 
 /**
@@ -78,7 +77,7 @@ export function getModelChain(): string[] {
 export async function requestStructuredCompletion(
   req: StructuredCompletionRequest,
 ): Promise<{ raw: string; provider: string | undefined }> {
-  const openai = getOpenRouterClient();
+  const openai = getOpenRouterClient(req.apiKey);
 
   const completion = await openai.chat.completions.create({
     model: req.model,

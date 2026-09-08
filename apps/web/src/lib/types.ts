@@ -76,6 +76,32 @@ export interface BrandKit {
   watermarkEnabled: boolean;
 }
 
+export interface CredentialsStatus {
+  openrouterApiKeySet: boolean;
+  pexelsApiKeySet: boolean;
+  pixabayApiKeySet: boolean;
+  azureSpeechKeySet: boolean;
+  azureSpeechRegion: string | null;
+  r2AccountIdSet: boolean;
+  r2AccessKeyIdSet: boolean;
+  r2SecretAccessKeySet: boolean;
+  r2Bucket: string | null;
+}
+
+/** A single field the settings UI lets a user edit -- either a secret
+ * (rendered as a password input, tracked via its *Set boolean) or a plain
+ * value (rendered as text, tracked via its own string|null field). */
+export type CredentialField =
+  | "openrouterApiKey"
+  | "pexelsApiKey"
+  | "pixabayApiKey"
+  | "azureSpeechKey"
+  | "azureSpeechRegion"
+  | "r2AccountId"
+  | "r2AccessKeyId"
+  | "r2SecretAccessKey"
+  | "r2Bucket";
+
 export const VOICE_OPTIONS: { id: string; label: string; language: Language }[] = [
   { id: "en-US-JennyNeural", label: "Jenny (US English, warm)", language: "en" },
   { id: "en-US-GuyNeural", label: "Guy (US English, energetic)", language: "en" },

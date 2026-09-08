@@ -36,6 +36,14 @@ When in doubt, `docs/PRD.md` wins.
   system baked into a rendered MP4. This is a licensing requirement.
 - Rendering never happens inside an HTTP request. Always via the queue.
 - No secrets in client code. All provider keys are server-side only.
+- Provider API keys can come from two places: the server's own env vars
+  (admin default) or a user's own key set via Settings > API Keys. A
+  user's key is always stored encrypted (AES-256-GCM under
+  CREDENTIALS_ENCRYPTION_KEY, see packages/core/src/crypto/secret-box.ts)
+  and never returned to the client in plaintext once saved -- API
+  responses only ever say whether a key is set. Resolve credentials with
+  `resolveUserCredentials()`, never by reading `process.env.*_API_KEY`
+  directly in a request/job handler.
 
 ## Commands
 

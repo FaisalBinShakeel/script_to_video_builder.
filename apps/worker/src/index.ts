@@ -1,12 +1,16 @@
 import os from "node:os";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
+import { eq } from "drizzle-orm";
 import { Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 import {
   createDb,
+  schema,
   RENDER_QUEUE_NAME,
   type RenderJobData,
+  resolveUserCredentials,
+  type ResolvedCredentials,
   AssetCache,
   LocalAssetStorage,
   R2AssetStorage,
@@ -22,41 +26,48 @@ import { env } from "./env.js";
 import { runRenderPipeline, markRenderFailed } from "./pipeline-runner.js";
 
 const MAX_ATTEMPTS = 2;
+const LOCAL_ASSET_CACHE_DIR = path.join(os.tmpdir(), "video-builder-asset-cache");
 
 const db = createDb(env.DATABASE_URL);
 const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
-const r2Client: S3Client | undefined =
-  env.R2_ACCOUNT_ID && env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY && env.R2_BUCKET
-    ? createR2Client({
-        accountId: env.R2_ACCOUNT_ID,
-        accessKeyId: env.R2_ACCESS_KEY_ID,
-        secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-        bucket: env.R2_BUCKET,
-      })
-    : undefined;
+/** Every render can be owned by a different user with different provider
+ * keys (Settings > API Keys), so the R2 client, asset cache, and upload
+ * function are all built fresh per job from that user's resolved
+ * credentials -- never from a single module-level default. */
+function buildUploadOutput(
+  credentials: ResolvedCredentials,
+): { r2Client?: S3Client; uploadOutput: (localPath: string, key: string) => Promise<string> } {
+  const r2Client =
+    credentials.r2AccountId && credentials.r2AccessKeyId && credentials.r2SecretAccessKey && credentials.r2Bucket
+      ? createR2Client({
+          accountId: credentials.r2AccountId,
+          accessKeyId: credentials.r2AccessKeyId,
+          secretAccessKey: credentials.r2SecretAccessKey,
+          bucket: credentials.r2Bucket,
+        })
+      : undefined;
 
-// Asset cache backend: R2 in production once configured, local disk
-// otherwise -- same AssetCache/AssetStorage interface from phase 2, so
-// nothing above it changes.
-const assetCache = new AssetCache(
-  r2Client && env.R2_BUCKET
-    ? new R2AssetStorage(r2Client, env.R2_BUCKET)
-    : new LocalAssetStorage(path.join(os.tmpdir(), "video-builder-asset-cache")),
-);
-
-async function uploadOutput(localPath: string, key: string): Promise<string> {
-  if (!r2Client || !env.R2_BUCKET) {
-    console.warn(
-      `[worker] R2 is not configured; leaving rendered output at ${localPath} instead of uploading to ${key}`,
+  async function uploadOutput(localPath: string, key: string): Promise<string> {
+    if (!r2Client || !credentials.r2Bucket) {
+      console.warn(
+        `[worker] R2 is not configured for this user; leaving rendered output at ${localPath} instead of uploading to ${key}`,
+      );
+      return localPath;
+    }
+    const body = await readFile(localPath);
+    await r2Client.send(
+      new PutObjectCommand({
+        Bucket: credentials.r2Bucket,
+        Key: key,
+        Body: body,
+        ContentType: "video/mp4",
+      }),
     );
-    return localPath;
+    return key;
   }
-  const body = await readFile(localPath);
-  await r2Client.send(
-    new PutObjectCommand({ Bucket: env.R2_BUCKET, Key: key, Body: body, ContentType: "video/mp4" }),
-  );
-  return key;
+
+  return { r2Client, uploadOutput };
 }
 
 const worker = new Worker<RenderJobData>(
@@ -66,12 +77,31 @@ const worker = new Worker<RenderJobData>(
     const workDir = path.join(os.tmpdir(), "video-builder-renders", renderId);
 
     try {
+      const render = await db.query.renders.findFirst({ where: eq(schema.renders.id, renderId) });
+      if (!render) throw new Error(`render ${renderId} not found`);
+
+      const credentials = await resolveUserCredentials(
+        db,
+        render.userId,
+        env.CREDENTIALS_ENCRYPTION_KEY,
+      );
+
+      const { r2Client, uploadOutput } = buildUploadOutput(credentials);
+      const assetCache = new AssetCache(
+        r2Client && credentials.r2Bucket
+          ? new R2AssetStorage(r2Client, credentials.r2Bucket)
+          : new LocalAssetStorage(LOCAL_ASSET_CACHE_DIR),
+      );
+
       await runRenderPipeline(renderId, {
         db,
-        pexels: new PexelsClient(env.PEXELS_API_KEY ?? ""),
-        pixabay: new PixabayClient(env.PIXABAY_API_KEY ?? ""),
+        pexels: new PexelsClient(credentials.pexelsApiKey ?? ""),
+        pixabay: new PixabayClient(credentials.pixabayApiKey ?? ""),
         assetCache,
-        ttsProvider: new AzureTTSProvider(env.AZURE_SPEECH_KEY ?? "", env.AZURE_SPEECH_REGION ?? ""),
+        ttsProvider: new AzureTTSProvider(
+          credentials.azureSpeechKey ?? "",
+          credentials.azureSpeechRegion ?? "",
+        ),
         audioProcessor: new FfmpegAudioProcessor(),
         voice: "en-US-JennyNeural",
         renderVideoFn: renderVideo,

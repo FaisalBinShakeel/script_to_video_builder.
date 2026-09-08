@@ -14,3 +14,5 @@ export * from "./storage/r2-storage.js";
 export * from "./db/schema.js";
 export * from "./db/client.js";
 export * from "./queue/types.js";
+export * from "./crypto/secret-box.js";
+export * from "./credentials/resolve.js";

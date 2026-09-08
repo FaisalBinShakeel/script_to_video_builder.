@@ -4,10 +4,12 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   schema,
   generateScript,
+  resolveUserCredentials,
   ScriptGenerationInputSchema,
   VideoScriptSchema,
 } from "@video-builder/core";
 import { requireAuth } from "../plugins/auth.js";
+import { env } from "../env.js";
 
 const MAX_CONCURRENT_RENDERS_PER_USER = 2;
 
@@ -21,7 +23,12 @@ export async function registerProjectRoutes(app: FastifyInstance) {
     if (!user) return;
 
     const body = CreateProjectSchema.parse(request.body);
-    const script = await generateScript(body);
+    const credentials = await resolveUserCredentials(
+      app.ctx.db,
+      user.id,
+      env.CREDENTIALS_ENCRYPTION_KEY,
+    );
+    const script = await generateScript(body, { apiKey: credentials.openrouterApiKey });
 
     const [project] = await app.ctx.db
       .insert(schema.projects)
