@@ -20,7 +20,8 @@
     "zod": "^3.24.1",
     "zod-to-json-schema": "^3.24.1",
     "openai": "^4.77.0",
-    "microsoft-cognitiveservices-speech-sdk": "^1.41.0"
+    "microsoft-cognitiveservices-speech-sdk": "^1.41.0",
+    "dotenv": "^16.4.7"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
